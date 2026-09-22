@@ -12,18 +12,31 @@ namespace CodeGuard.Agent;
 ///   ollama : free, local (http://localhost:11434/v1)
 ///   github : free tier with rate limits (GitHub Models)
 ///   azure  : Microsoft Foundry (pay per token; use trial credit + a budget alert)
+///   none   : no LLM at all; only the deterministic rules run (offline / air-gapped CI)
 /// </summary>
 public static class ChatClientFactory
 {
-    public static (IChatClient Client, string Description) Create(string provider)
+    public static (IChatClient? Client, string Description) Create(string provider)
     {
         switch (provider.ToLowerInvariant())
         {
+            case "none":
+            case "rules":
+                return (null, "deterministic rules only (no LLM)");
             case "ollama":
             {
                 var endpoint = Env("OLLAMA_ENDPOINT") ?? "http://localhost:11434/v1";
                 var model = Env("OLLAMA_MODEL") ?? "qwen2.5-coder:7b";
-                var client = new OpenAIClient(new ApiKeyCredential("ollama"), new OpenAIClientOptions { Endpoint = new Uri(endpoint) });
+                // A local model on CPU can take minutes per call, far beyond the SDK's 100 s default,
+                // and retrying a slow local request only multiplies the wait. Tune with OLLAMA_TIMEOUT_SECONDS.
+                var timeout = int.TryParse(Env("OLLAMA_TIMEOUT_SECONDS"), out var s) && s > 0 ? s : 600;
+                var options = new OpenAIClientOptions
+                {
+                    Endpoint = new Uri(endpoint),
+                    NetworkTimeout = TimeSpan.FromSeconds(timeout),
+                    RetryPolicy = new ClientRetryPolicy(maxRetries: 0),
+                };
+                var client = new OpenAIClient(new ApiKeyCredential("ollama"), options);
                 return (client.GetChatClient(model).AsIChatClient(), $"Ollama ({model})");
             }
             case "github":
@@ -50,7 +63,7 @@ public static class ChatClientFactory
                 return (client.GetChatClient(deployment).AsIChatClient(), $"Microsoft Foundry ({deployment}, {(key is null ? "Entra ID" : "API key")})");
             }
             default:
-                throw new ArgumentException($"Unknown provider '{provider}'. Use ollama, github or azure.");
+                throw new ArgumentException($"Unknown provider '{provider}'. Use ollama, github, azure or none.");
         }
     }
 

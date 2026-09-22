@@ -41,7 +41,7 @@ flowchart LR
 
 ```bash
 dotnet build
-dotnet test                       # 18 tests, no LLM needed
+dotnet test                       # 20 tests, no LLM needed
 ```
 
 ## Choose a model provider
@@ -51,6 +51,7 @@ dotnet test                       # 18 tests, no LLM needed
 | `ollama` | Free (runs on your PC) | Daily development |
 | `github` | Free tier, rate-limited | CI and quick tests |
 | `azure` | Pay per token (tiny for this project) | Portfolio demo on Microsoft Foundry |
+| `none` | Free, no model at all | Offline / air-gapped runs: deterministic rules only (secrets, TFN checksum) |
 
 ### 1. Ollama (free, local)
 
@@ -58,6 +59,19 @@ dotnet test                       # 18 tests, no LLM needed
 # install from https://ollama.com, then pick a model that supports tool calling
 ollama pull qwen2.5-coder:7b
 export CODEGUARD_PROVIDER=ollama       # PowerShell: $env:CODEGUARD_PROVIDER="ollama"
+```
+
+On CPU-only machines a 7B model can take several minutes per call. Defaults are tuned for that
+(10 min per request, no retries, 15 min per run); adjust with `OLLAMA_TIMEOUT_SECONDS`,
+`CODEGUARD_TIMEOUT_MINUTES`, or a smaller `OLLAMA_MODEL` such as `qwen2.5-coder:3b`.
+
+### 0. No model (rules only)
+
+Nothing to install. Only the deterministic `SecretScanner` rules run, so the semantic rules
+(SQL injection, missing `[Authorize]`, insecure deserialization, …) are not checked.
+
+```bash
+dotnet run --project src/CodeGuard.Agent -- review --repo . --provider none --diff-file evals/cases/02-hardcoded-secret/diff.patch
 ```
 
 ### 2. GitHub Models (free tier)

@@ -33,7 +33,9 @@ public static class ReportRenderer
 
         sb.AppendLine().Append($"<sub>{provider} · {run.Duration.TotalSeconds:0.0}s · tool calls: {run.ToolCalls}");
         if (run.InputTokens is not null) sb.Append($" · tokens in/out: {run.InputTokens}/{run.OutputTokens}");
-        sb.AppendLine(" · AI-generated, verify before acting.</sub>");
+        sb.AppendLine(r.Summary == Reviewer.RulesOnlySummary
+            ? " · deterministic rules only, no LLM.</sub>"
+            : " · AI-generated, verify before acting.</sub>");
         return sb.ToString();
     }
 

@@ -45,6 +45,27 @@ public class ReviewerTests
     }
 
     [Fact]
+    public async Task Null_chat_client_runs_deterministic_rules_only()
+    {
+        var run = await new Reviewer(chat: null, [], rules: "").ReviewAsync(Diff);
+
+        var finding = Assert.Single(run.Result.Findings);
+        Assert.Equal("CG-SECRET", finding.RuleId);
+        Assert.Equal("rule", finding.Source);
+        Assert.Equal(Reviewer.RulesOnlySummary, run.Result.Summary);
+        Assert.Equal(0, run.ToolCalls);
+        Assert.Null(run.InputTokens);
+    }
+
+    [Fact]
+    public void Factory_returns_no_client_for_provider_none()
+    {
+        var (client, description) = ChatClientFactory.Create("none");
+        Assert.Null(client);
+        Assert.Contains("rules only", description);
+    }
+
+    [Fact]
     public async Task Unparseable_reply_still_returns_rule_findings()
     {
         var run = await new Reviewer(new FakeChatClient("sorry, I can't"), [], rules: "").ReviewAsync(Diff);
