@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      run_evals:
+        description: "Run the LLM eval suite (uses GitHub Models free tier)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  models: read
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - run: dotnet test -c Release -v q
+
+  evals:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_evals
+    needs: build-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - run: dotnet build src/CodeGuard.Agent -c Release -v q
+      - name: Run evals
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: dotnet src/CodeGuard.Agent/bin/Release/net10.0/CodeGuard.Agent.dll eval --repo . --provider github --out eval-results.md
+      - run: cat eval-results.md >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,46 @@
+name: CodeGuard PR review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write   # post the review comment
+  models: read           # call GitHub Models (free tier) with the built-in token
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    # PRs from forks get a read-only token and no model access, so skip them.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # needed for git diff base...HEAD
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Build CodeGuard
+        run: dotnet build src/CodeGuard.Agent -c Release -v q
+
+      - name: Review pull request
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CODEGUARD_PROVIDER: github
+          GITHUB_MODEL: openai/gpt-4o-mini
+          # CODEGUARD_ALLOW_EXEC stays unset: never run untrusted PR code with a write token.
+        run: >
+          dotnet src/CodeGuard.Agent/bin/Release/net10.0/CodeGuard.Agent.dll review
+          --repo .
+          --base origin/${{ github.base_ref }}
+          --pr ${{ github.event.pull_request.number }}
+          --out codeguard-review.md
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: codeguard-review
+          path: codeguard-review.md

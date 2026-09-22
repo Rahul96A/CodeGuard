@@ -1,0 +1,19 @@
+diff --git a/src/Banking/AccountQueries.cs b/src/Banking/AccountQueries.cs
+new file mode 100644
+--- /dev/null
++++ b/src/Banking/AccountQueries.cs
+@@ -0,0 +1,14 @@
++using Dapper;
++using Microsoft.Data.SqlClient;
++
++namespace Banking;
++
++public sealed class AccountQueries(string connectionString)
++{
++    public async Task<decimal> GetBalanceAsync(Guid accountId, CancellationToken ct)
++    {
++        await using var conn = new SqlConnection(connectionString);
++        return await conn.ExecuteScalarAsync<decimal>(
++            new CommandDefinition("SELECT Balance FROM Accounts WHERE Id = @accountId", new { accountId }, cancellationToken: ct));
++    }
++}
