@@ -13,7 +13,7 @@ public sealed record ExpectedFinding(string RuleId, string File, int Line);
 /// </summary>
 public static class EvalRunner
 {
-    public static async Task<int> RunAsync(string casesDir, IChatClient chat, string rules, string provider, string outFile, CancellationToken ct)
+    public static async Task<int> RunAsync(string casesDir, IChatClient? chat, string rules, string provider, string outFile, CancellationToken ct)
     {
         int tp = 0, fp = 0, fn = 0;
         var report = new StringBuilder($"# CodeGuard eval results\n\nProvider: {provider} · {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC\n\n");

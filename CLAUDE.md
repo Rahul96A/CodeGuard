@@ -11,7 +11,7 @@ AI pull-request reviewer for .NET, focused on Australian banking/insurance risks
 - Review a patch: `dotnet run --project src/CodeGuard.Agent -- review --repo . --diff-file evals/cases/01-sql-injection/diff.patch`
 - Evals: `dotnet run --project src/CodeGuard.Agent -- eval --repo . --out eval-results.md`
 
-Provider comes from `CODEGUARD_PROVIDER` = `ollama` (default, free local) | `github` | `azure`. See README for env vars.
+Provider comes from `CODEGUARD_PROVIDER` = `ollama` (default, free local) | `azure` | `none` (deterministic rules only, no LLM; used by CI and for offline runs). GitHub Models was retired in July 2026 and is not a provider. See README for env vars.
 
 ## Layout
 - `src/CodeGuard.Core` — pure logic, no I/O to LLMs: DiffParser, SecretScanner (incl. TFN checksum), PathGuard, ReviewJson.

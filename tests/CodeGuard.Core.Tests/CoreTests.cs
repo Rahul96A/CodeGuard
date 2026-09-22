@@ -82,6 +82,36 @@ public class ReviewJsonTests
 
     [Fact]
     public void Returns_null_on_garbage() => Assert.Null(ReviewJson.TryParse("no json here"));
+
+    [Fact]
+    public void Repairs_reply_that_stops_before_the_final_closing_brace()
+    {
+        // qwen2.5-coder on Ollama frequently ends the turn right after "}]" and omits the last "}".
+        var text = "{\"summary\":\"s\",\"findings\":[{\"ruleId\":\"CG-SQLI\",\"severity\":\"High\",\"file\":\"a.cs\",\"line\":11,\"title\":\"t\",\"explanation\":\"e\"}]";
+        var r = ReviewJson.TryParse(text);
+        Assert.NotNull(r);
+        Assert.Equal(11, Assert.Single(r!.Findings).Line);
+    }
+
+    [Fact]
+    public void Repairs_reply_missing_several_closers_inside_a_fence()
+    {
+        var text = """
+            ```json
+            {"summary":"s","findings":[{"ruleId":"CG-PII","severity":"Low","file":"a.cs","line":2,"title":"t","explanation":"braces { in [ strings ] are ignored"
+            ```
+            """;
+        var r = ReviewJson.TryParse(text);
+        Assert.NotNull(r);
+        Assert.Equal("CG-PII", Assert.Single(r!.Findings).RuleId);
+    }
+
+    [Fact]
+    public void Does_not_guess_when_cut_mid_string_or_malformed()
+    {
+        Assert.Null(ReviewJson.TryParse("{\"summary\":\"cut off he"));
+        Assert.Null(ReviewJson.TryParse("{\"summary\":\"s\",\"findings\":[}"));
+    }
 }
 
 public class PathGuardTests

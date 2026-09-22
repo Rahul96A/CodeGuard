@@ -6,7 +6,7 @@ using Microsoft.Extensions.AI;
 // ---------------------------------------------------------------------------
 //  CodeGuard – AI pull-request reviewer for .NET (MCP + Microsoft.Extensions.AI)
 //
-//  codeguard review  --repo . --base origin/main [--provider ollama|github|azure] [--out review.md] [--pr 12] [--fail-on High]
+//  codeguard review  --repo . --base origin/main [--provider ollama|azure|none] [--out review.md] [--pr 12] [--fail-on High]
 //  codeguard review  --diff-file changes.patch --repo .
 //  codeguard eval    --cases evals/cases [--provider ...]
 //  codeguard tools   --repo .                        (list MCP tools, no LLM needed)
@@ -18,7 +18,9 @@ string? Arg(string name) { var i = Array.IndexOf(args, "--" + name); return i >=
 
 var repo = Path.GetFullPath(Arg("repo") ?? ".");
 var provider = Arg("provider") ?? Environment.GetEnvironmentVariable("CODEGUARD_PROVIDER") ?? "ollama";
-using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(15));
+// Whole-run budget. Local CPU models can be slow; raise with CODEGUARD_TIMEOUT_MINUTES.
+var budget = int.TryParse(Environment.GetEnvironmentVariable("CODEGUARD_TIMEOUT_MINUTES"), out var mins) && mins > 0 ? mins : 15;
+using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(budget));
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 
 try
@@ -54,10 +56,14 @@ try
             if (string.IsNullOrWhiteSpace(diff)) { Console.WriteLine("No changes to review."); return 0; }
 
             var (chat, description) = BuildChat(provider);
-            await using var mcp = await McpConnection.ConnectAsync(repo, cts.Token);
-            var tools = (await mcp.ListToolsAsync(cancellationToken: cts.Token)).Cast<AITool>().ToList();
 
-            Console.Error.WriteLine($"Reviewing with {description} and {tools.Count} MCP tools...");
+            // Rules-only mode never calls tools, so skip starting the MCP server.
+            await using var mcp = chat is null ? null : await McpConnection.ConnectAsync(repo, cts.Token);
+            var tools = mcp is null ? [] : (await mcp.ListToolsAsync(cancellationToken: cts.Token)).Cast<AITool>().ToList();
+
+            Console.Error.WriteLine(chat is null
+                ? $"Reviewing with {description}..."
+                : $"Reviewing with {description} and {tools.Count} MCP tools...");
             var run = await new Reviewer(chat, tools, LoadRules(repo)).ReviewAsync(diff, cts.Token);
             var markdown = ReportRenderer.ToMarkdown(run, description);
 
@@ -89,16 +95,53 @@ try
 catch (Exception ex) when (ex is not OperationCanceledException)
 {
     Console.Error.WriteLine($"CodeGuard error: {ex.Message}");
+    if (IsTimeout(ex))
+    {
+        Console.Error.WriteLine();
+        Console.Error.WriteLine($"The '{provider}' LLM provider did not answer in time.");
+        if (provider.Equals("ollama", StringComparison.OrdinalIgnoreCase))
+            Console.Error.WriteLine("  A local model on CPU can take minutes per call. Raise OLLAMA_TIMEOUT_SECONDS (default 600), free up RAM, or pick a smaller OLLAMA_MODEL.");
+        Console.Error.WriteLine("  Or run --provider none for the deterministic rules only, with no LLM.");
+    }
+    else if (IsConnectionFailure(ex))
+    {
+        Console.Error.WriteLine();
+        Console.Error.WriteLine($"Could not reach the '{provider}' LLM provider.");
+        if (provider.Equals("ollama", StringComparison.OrdinalIgnoreCase))
+            Console.Error.WriteLine("  Start Ollama (`ollama serve`) and pull a model (`ollama pull qwen2.5-coder:7b`), or set OLLAMA_ENDPOINT.");
+        Console.Error.WriteLine("  Alternatively: --provider azure, or --provider none to run the deterministic rules only, with no LLM.");
+    }
     return 1;
 }
 
-static (IChatClient Chat, string Description) BuildChat(string provider, int maxToolRounds = 8)
+static (IChatClient? Chat, string Description) BuildChat(string provider, int maxToolRounds = 8)
 {
     var (inner, description) = ChatClientFactory.Create(provider);
+    if (inner is null) return (null, description);
     var client = new ChatClientBuilder(inner)
         .UseFunctionInvocation(configure: f => f.MaximumIterationsPerRequest = maxToolRounds)
         .Build();
     return (client, description);
+}
+
+static bool IsTimeout(Exception ex)
+{
+    for (Exception? e = ex; e is not null; e = e.InnerException)
+    {
+        if (e is TimeoutException or TaskCanceledException) return true;
+        if (e is AggregateException agg && agg.InnerExceptions.Any(IsTimeout)) return true;
+    }
+    return false;
+}
+
+static bool IsConnectionFailure(Exception ex)
+{
+    for (Exception? e = ex; e is not null; e = e.InnerException)
+    {
+        if (e is System.Net.Http.HttpRequestException or System.Net.Sockets.SocketException) return true;
+        if (e is AggregateException agg && agg.InnerExceptions.Any(IsConnectionFailure)) return true;
+    }
+    return false;
 }
 
 static string LoadRules(string repo) =>

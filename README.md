@@ -4,7 +4,7 @@ An AI coding agent that reviews pull requests for security and quality issues re
 **Australian banking and insurance** (APRA CPS 234–inspired rules, Privacy Act / TFN handling, OWASP).
 
 Built with **.NET 10**, the official **Model Context Protocol (MCP) C# SDK**, and **Microsoft.Extensions.AI**,
-so the same code runs on a free local model, GitHub Models, or **Microsoft Foundry** (formerly Azure AI Foundry).
+so the same code runs on a free local model or **Microsoft Foundry** (formerly Azure AI Foundry).
 
 ```mermaid
 flowchart LR
@@ -41,7 +41,7 @@ flowchart LR
 
 ```bash
 dotnet build
-dotnet test                       # 18 tests, no LLM needed
+dotnet test                       # 20 tests, no LLM needed
 ```
 
 ## Choose a model provider
@@ -49,8 +49,8 @@ dotnet test                       # 18 tests, no LLM needed
 | Provider | Cost | Best for |
 |---|---|---|
 | `ollama` | Free (runs on your PC) | Daily development |
-| `github` | Free tier, rate-limited | CI and quick tests |
 | `azure` | Pay per token (tiny for this project) | Portfolio demo on Microsoft Foundry |
+| `none` | Free, no model at all | CI and offline runs: deterministic rules only (secrets, TFN checksum) |
 
 ### 1. Ollama (free, local)
 
@@ -60,17 +60,22 @@ ollama pull qwen2.5-coder:7b
 export CODEGUARD_PROVIDER=ollama       # PowerShell: $env:CODEGUARD_PROVIDER="ollama"
 ```
 
-### 2. GitHub Models (free tier)
+On CPU-only machines a 7B model can take several minutes per call. Defaults are tuned for that
+(10 min per request, no retries, 15 min per run); adjust with `OLLAMA_TIMEOUT_SECONDS`,
+`CODEGUARD_TIMEOUT_MINUTES`, or a smaller `OLLAMA_MODEL` such as `qwen2.5-coder:3b`.
 
-Create a fine-grained personal access token with the **Models: read** permission.
+### 0. No model (rules only)
+
+Nothing to install. Only the deterministic `SecretScanner` rules run, so the semantic rules
+(SQL injection, missing `[Authorize]`, insecure deserialization, …) are not checked.
 
 ```bash
-export CODEGUARD_PROVIDER=github
-export GITHUB_TOKEN=github_pat_xxx
-export GITHUB_MODEL=openai/gpt-4o-mini
+dotnet run --project src/CodeGuard.Agent -- review --repo . --provider none --diff-file evals/cases/02-hardcoded-secret/diff.patch
 ```
 
-### 3. Microsoft Foundry (your Azure project)
+> GitHub Models (a former free-tier provider) was retired by GitHub on 30 July 2026 and has been removed.
+
+### 2. Microsoft Foundry (your Azure project)
 
 The Foundry portal itself is free; you pay only for model tokens. Keep it near-free:
 
@@ -122,8 +127,8 @@ Compare models and prompts by their precision/recall, and commit `eval-results.m
 
 ## GitHub Actions
 
-- `codeguard-pr-review.yml` reviews every PR using **GitHub Models with the built-in token** (`permissions: models: read`), so there are no secrets to manage, and upserts a single comment.
-- `ci.yml` runs unit tests on every push and the eval suite on manual trigger.
+- `codeguard-pr-review.yml` reviews every PR with the **deterministic rules only** (`--provider none`): no model, no secrets, no cost. It upserts a single comment. To add the LLM pass in CI, set `CODEGUARD_PROVIDER: azure` plus `AZURE_OPENAI_ENDPOINT` / `AZURE_OPENAI_API_KEY` as repository secrets.
+- `ci.yml` runs unit tests on every push and the rules-only eval suite on manual trigger. Run the LLM evals locally with Ollama or Foundry.
 
 Execution tools (`run_dotnet_build`, `run_dotnet_test`) are **off** unless `CODEGUARD_ALLOW_EXEC=true`.
 Never enable them for untrusted PRs in a job that has a write token.
