@@ -7,7 +7,6 @@ on:
 permissions:
   contents: read
   pull-requests: write   # post the review comment
-  models: read           # call GitHub Models (free tier) with the built-in token
 
 jobs:
   review:
@@ -28,9 +27,10 @@ jobs:
 
       - name: Review pull request
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CODEGUARD_PROVIDER: github
-          GITHUB_MODEL: openai/gpt-4o-mini
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # only used to post the comment
+          # Deterministic rules only (secrets, TFN checksum): no model, no secrets, no cost.
+          # GitHub Models was retired in July 2026; run the LLM review locally with Ollama or Foundry.
+          CODEGUARD_PROVIDER: none
           # CODEGUARD_ALLOW_EXEC stays unset: never run untrusted PR code with a write token.
         run: >
           dotnet src/CodeGuard.Agent/bin/Release/net10.0/CodeGuard.Agent.dll review

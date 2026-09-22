@@ -66,6 +66,13 @@ public class ReviewerTests
     }
 
     [Fact]
+    public void Factory_rejects_retired_github_provider_with_a_clear_message()
+    {
+        var ex = Assert.Throws<ArgumentException>(() => ChatClientFactory.Create("github"));
+        Assert.Contains("retired", ex.Message);
+    }
+
+    [Fact]
     public async Task Unparseable_reply_still_returns_rule_findings()
     {
         var run = await new Reviewer(new FakeChatClient("sorry, I can't"), [], rules: "").ReviewAsync(Diff);

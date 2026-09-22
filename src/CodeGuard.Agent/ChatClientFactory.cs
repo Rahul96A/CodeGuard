@@ -7,10 +7,9 @@ using OpenAI;
 namespace CodeGuard.Agent;
 
 /// <summary>
-/// One IChatClient abstraction, three backends. All three speak the OpenAI-compatible API,
+/// One IChatClient abstraction, two backends. Both speak the OpenAI-compatible API,
 /// so the rest of the code never knows which one is in use.
 ///   ollama : free, local (http://localhost:11434/v1)
-///   github : free tier with rate limits (GitHub Models)
 ///   azure  : Microsoft Foundry (pay per token; use trial credit + a budget alert)
 ///   none   : no LLM at all; only the deterministic rules run (offline / air-gapped CI)
 /// </summary>
@@ -40,12 +39,7 @@ public static class ChatClientFactory
                 return (client.GetChatClient(model).AsIChatClient(), $"Ollama ({model})");
             }
             case "github":
-            {
-                var token = Env("GITHUB_TOKEN") ?? throw new InvalidOperationException("Set GITHUB_TOKEN (a PAT with 'models:read', or the Actions token).");
-                var model = Env("GITHUB_MODEL") ?? "openai/gpt-4o-mini";
-                var client = new OpenAIClient(new ApiKeyCredential(token), new OpenAIClientOptions { Endpoint = new Uri("https://models.github.ai/inference") });
-                return (client.GetChatClient(model).AsIChatClient(), $"GitHub Models ({model})");
-            }
+                throw new ArgumentException("GitHub Models was retired on 30 July 2026. Use ollama, azure or none.");
             case "azure":
             {
                 // Foundry resource endpoint, e.g. https://<resource>.openai.azure.com  or  https://<resource>.services.ai.azure.com
@@ -63,7 +57,7 @@ public static class ChatClientFactory
                 return (client.GetChatClient(deployment).AsIChatClient(), $"Microsoft Foundry ({deployment}, {(key is null ? "Entra ID" : "API key")})");
             }
             default:
-                throw new ArgumentException($"Unknown provider '{provider}'. Use ollama, github, azure or none.");
+                throw new ArgumentException($"Unknown provider '{provider}'. Use ollama, azure or none.");
         }
     }
 

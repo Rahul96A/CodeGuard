@@ -6,7 +6,7 @@ using Microsoft.Extensions.AI;
 // ---------------------------------------------------------------------------
 //  CodeGuard – AI pull-request reviewer for .NET (MCP + Microsoft.Extensions.AI)
 //
-//  codeguard review  --repo . --base origin/main [--provider ollama|github|azure|none] [--out review.md] [--pr 12] [--fail-on High]
+//  codeguard review  --repo . --base origin/main [--provider ollama|azure|none] [--out review.md] [--pr 12] [--fail-on High]
 //  codeguard review  --diff-file changes.patch --repo .
 //  codeguard eval    --cases evals/cases [--provider ...]
 //  codeguard tools   --repo .                        (list MCP tools, no LLM needed)
@@ -109,8 +109,7 @@ catch (Exception ex) when (ex is not OperationCanceledException)
         Console.Error.WriteLine($"Could not reach the '{provider}' LLM provider.");
         if (provider.Equals("ollama", StringComparison.OrdinalIgnoreCase))
             Console.Error.WriteLine("  Start Ollama (`ollama serve`) and pull a model (`ollama pull qwen2.5-coder:7b`), or set OLLAMA_ENDPOINT.");
-        Console.Error.WriteLine("  Alternatively: --provider github (needs GITHUB_TOKEN with models:read), --provider azure,");
-        Console.Error.WriteLine("  or --provider none to run the deterministic rules only, with no LLM.");
+        Console.Error.WriteLine("  Alternatively: --provider azure, or --provider none to run the deterministic rules only, with no LLM.");
     }
     return 1;
 }
